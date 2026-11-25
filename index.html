@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Auditoría SonarQube de Kaddo — informe para mantenedores</title>
+<meta name="description" content="Análisis estático constructivo del monorepo Kaddo con SonarQube CE 26.7.0: 0 vulnerabilidades, riesgos acotados de determinismo y complejidad, 23 hallazgos verificados y un roadmap en olas listo para convertirse en issues o PRs. Preparado por JNZader.">
+<meta name="author" content="JNZader">
+<meta property="og:title" content="Auditoría SonarQube de Kaddo — informe para mantenedores">
+<meta property="og:description" content="Informe constructivo y issue-ready: qué está bien en Kaddo, los riesgos reales (determinismo, complejidad, un test sin assertions) y un roadmap propuesto. Cobertura 0% = sin reporte importado, no ausencia de tests.">
+<meta property="og:type" content="article">
+<meta property="og:locale" content="es">
+<meta name="twitter:card" content="summary">
+<style>
+  :root, :root[data-theme="light"] { color-scheme: light; --bg:#f4f7f7; --surface:#fff; --ink:#16282c; --muted:#5b6e72; --line:#d5dfe0; --accent:#1a6b63; --accent-soft:#e6f3f1; --warn:#8a5a00; --warn-bg:#fff6e5; --ok:#1b6b3a; --ok-bg:#e8f6ee; --bad:#8b1e1e; --bad-bg:#fceaea; --panel:#fafbfb; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; --bg:#0f1a1c; --surface:#172427; --ink:#e4eeef; --muted:#93a8ac; --line:#2a3b3f; --accent:#4db6a8; --accent-soft:#1a3533; --warn:#e0b45c; --warn-bg:#2f2715; --ok:#6ecf8e; --ok-bg:#163024; --bad:#f0a0a0; --bad-bg:#3a1c1c; --panel:#132022; } }
+  :root[data-theme="dark"] { color-scheme: dark; --bg:#0f1a1c; --surface:#172427; --ink:#e4eeef; --muted:#93a8ac; --line:#2a3b3f; --accent:#4db6a8; --accent-soft:#1a3533; --warn:#e0b45c; --warn-bg:#2f2715; --ok:#6ecf8e; --ok-bg:#163024; --bad:#f0a0a0; --bad-bg:#3a1c1c; --panel:#132022; }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;font:15.5px/1.65 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{background:var(--surface);border-bottom:1px solid var(--line);padding:22px 24px 16px;position:sticky;top:0;z-index:5}
+  .wrap{max-width:1080px;margin:0 auto}
+  .header-top{display:flex;justify-content:space-between;gap:12px;align-items:start;flex-wrap:wrap}
+  h1{margin:0;font-size:1.35rem}
+  h1 span{display:block;font-weight:500;color:var(--muted);font-size:.88rem;margin-top:4px}
+  h2{font-size:1.18rem;margin:0 0 18px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  h3{font-size:1rem;margin:30px 0 12px}
+  h4{font-size:.92rem;margin:24px 0 10px}
+  .meta{margin:8px 0 0;color:var(--muted);font-size:.86rem}
+  button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;padding:7px 12px;font-size:.85rem;cursor:pointer;font:inherit}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  main{padding:22px 24px 56px}
+  section{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px 24px;margin:0 0 20px;scroll-margin-top:170px}
+  .ok{background:var(--ok-bg);border-color:var(--ok)}
+  .warn{background:var(--warn-bg);border-color:var(--warn)}
+  .bad{background:var(--bad-bg);border-color:var(--bad)}
+  p{margin:0 0 13px;line-height:1.65}
+  p:last-child{margin-bottom:0}
+  ol,ul{margin:10px 0 16px;padding-left:1.5rem}
+  li{margin:9px 0;line-height:1.6}
+  li::marker{color:var(--muted)}
+  code{font-size:.84rem;word-break:break-word;background:var(--panel);padding:1px 5px;border-radius:4px}
+  .table-scroll{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+  table{width:100%;min-width:640px;border-collapse:collapse;font-size:.9rem;margin:0}
+  th,td{text-align:left;vertical-align:top;border-top:1px solid var(--line);padding:10px 12px;line-height:1.55}
+  th{color:var(--muted);font-weight:650;font-size:.78rem}
+  thead th{border-top:none;background:var(--panel);letter-spacing:.02em}
+  tbody tr:nth-child(even){background:var(--panel)}
+  .tag{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid var(--line);margin-right:4px;white-space:nowrap}
+  .tag.go{color:var(--ok);border-color:var(--ok);background:var(--ok-bg)}
+  .tag.wait{color:var(--warn);border-color:var(--warn);background:var(--warn-bg)}
+  .tag.stop{color:var(--bad);border-color:var(--bad);background:var(--bad-bg)}
+  textarea{width:100%;min-height:5.5rem;resize:vertical;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;color:var(--ink);background:var(--surface);margin-top:6px}
+  textarea:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  #aviso{color:var(--muted);font-size:.86rem}
+  footer{color:var(--muted);font-size:.82rem;padding:0 24px 28px}
+  .fichas{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:16px 0 6px}
+  .ficha{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel)}
+  .ficha b{display:block;font-size:1.45rem;line-height:1.2}
+  .ficha span{color:var(--muted);font-size:.82rem}
+  .leyenda{color:var(--muted);font-size:.84rem;margin:16px 0 0;line-height:1.6}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .snippet{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:12px 0}
+  .snippet mark{background:var(--warn-bg);color:var(--ink);border-left:3px solid var(--warn);display:inline-block;width:100%}
+  .dpi{display:grid;grid-template-columns:max-content 1fr;gap:10px 18px;margin:16px 0;padding:14px 16px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+  .dpi dt{margin:0;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--accent);padding-top:3px}
+  .dpi dd{margin:0;line-height:1.65}
+  .finding{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:16px 0}
+  .finding:first-of-type{margin-top:14px}
+  .finding h3{margin:0 0 10px}
+  .finding .meta{margin:0 0 12px}
+  .finding .meta + p{background:var(--panel);border-left:3px solid var(--accent);padding:9px 12px;border-radius:0 8px 8px 0;margin:0 0 14px}
+  .finding p{margin:0 0 13px}
+  .finding p:last-child{margin-bottom:0}
+  .barrow{background:var(--panel);border:1px solid var(--line);border-radius:4px;height:12px;min-width:60px;overflow:hidden}
+  .barrow.big{height:16px;flex:1}
+  .barfill{background:var(--accent);height:100%}
+  .barfill.stop{background:var(--bad)}
+  .barfill.wait{background:var(--warn)}
+  .barfill.go{background:var(--ok)}
+  .sevrow{display:flex;align-items:center;gap:10px;margin:8px 0}
+  .sevrow .tag{min-width:78px;text-align:center}
+  .sevnum{color:var(--muted);font-size:.84rem;min-width:110px}
+  .diagram{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;overflow-x:auto;white-space:pre;margin:14px 0}
+  nav.toc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 18px;margin:0 0 20px}
+  nav.toc h2{font-size:.95rem;margin:0 0 10px;padding-bottom:0;border-bottom:none}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:0;padding:0}
+  nav.toc li{margin:0}
+  nav.toc a{display:inline-block;font-size:.82rem;color:var(--accent);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--panel)}
+  nav.toc a:hover,nav.toc a:focus-visible{background:var(--accent-soft);border-color:var(--accent)}
+  .issue-title{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+  @media (max-width:720px){
+    .two-col{grid-template-columns:1fr}
+    header{position:static;padding:16px 14px 12px}
+    main{padding:16px 14px 48px}
+    section{padding:18px 16px;scroll-margin-top:24px}
+    footer{padding:0 14px 24px}
+    h2{font-size:1.1rem}
+    .finding{padding:14px}
+    .dpi{grid-template-columns:1fr;gap:2px 0;padding:12px 14px}
+    .dpi dt{padding-top:0;margin-top:10px}
+    .dpi dt:first-child{margin-top:0}
+    .dpi dd{margin-bottom:4px}
+  }
+</style></head><body>
+<header><div class="wrap header-top"><div>
+  <h1>Auditoría SonarQube de Kaddo — informe para mantenedores
+    <span>SonarQube CE 26.7.0 · scanner CLI 8.0.1 · 513 archivos (310 fuente + 203 test) · 54.723 ncloc · revisión f7325f9 · v3.144.1</span></h1>
+  <p class="meta">25 de noviembre de 2026. Análisis estático completo del monorepo, preparado por JNZader como aporte independiente al proyecto. Incluye análisis de la CI actual y propuesta de CI modular. No modifica código del proyecto: todo se comparte como material de discusión y posibles PRs.</p>
+</div><button type="button" id="theme">Tema</button></div></header>
+<main class="wrap">
+
+<nav class="toc" aria-label="Índice del informe">
+  <h2>Índice</h2>
+  <ol>
+    <li><a href="#resumen">Resumen para mantenedores</a></li>
+    <li><a href="#positivo">Lo que está funcionando bien</a></li>
+    <li><a href="#metodologia">1 · Metodología y alcance</a></li>
+    <li><a href="#metricas">2 · Métricas generales</a></li>
+    <li><a href="#severidad">3 · Severidad y tipo</a></li>
+    <li><a href="#reglas">4 · Top 15 reglas</a></li>
+    <li><a href="#paquetes">5 · Hallazgos por paquete</a></li>
+    <li><a href="#hallazgos">6 · Hallazgos verificados</a></li>
+    <li><a href="#critico">6.1 · Crítico</a></li>
+    <li><a href="#importante">6.2 · Importante</a></li>
+    <li><a href="#mejora-a11y">6.3 · Mejora: a11y</a></li>
+    <li><a href="#mejora-mecanico">6.4 · Mejora: mecánico</a></li>
+    <li><a href="#mejora-duplicacion">6.5 · Mejora: duplicación</a></li>
+    <li><a href="#ci-analisis">7 · Análisis de CI</a></li>
+    <li><a href="#ci-propuesta">8 · Propuesta de CI modular</a></li>
+    <li><a href="#roadmap">9 · Roadmap (issues candidatos)</a></li>
+    <li><a href="#reproducir">10 · Cómo reproducir el análisis</a></li>
+    <li><a href="#decisiones">11 · Decisiones abiertas</a></li>
+    <li><a href="#nota-section">Nota / decisión</a></li>
+  </ol>
+</nav>
+
+<section id="resumen" class="ok">
+  <h2>Resumen para mantenedores</h2>
+  <p class="leyenda">Este bloque está pensado para copiarse tal cual a un issue de GitHub. <button type="button" id="copiar-resumen">Copiar resumen</button></p>
+  <div id="resumen-texto">
+  <p>Analizamos el monorepo de Kaddo (revisión <code>f7325f9</code>, v3.144.1) con SonarQube Community Edition 26.7.0 y el perfil «Sonar way» para TypeScript. Es un aporte externo no solicitado: el objetivo es compartir una lectura de mantenibilidad y determinismo, y ofrecer ayuda concreta, no juzgar el proyecto.</p>
+  <p>El alcance cubre 310 archivos fuente (54.723 líneas) en <code>packages</code>, <code>apps/docs</code> y <code>scripts</code>, más 203 archivos de test. Se revisaron los 1.828 issues completos vía API y cada hallazgo destacado se verificó contra el código fuente en la revisión analizada.</p>
+  <p>Los resultados positivos son claros: 0 vulnerabilidades y 0 security hotspots, duplicación baja (2,4%), una estructura de monorepo limpia y una automatización de release sólida (provenance npm, guards de sincronización y smoke tests del paquete MCP publicado). Gracias por mantener Kaddo como open source bajo licencia MIT: la arquitectura del monorepo y el cuidado del release son de lo mejor que vimos en este análisis.</p>
+  <p>Una aclaración importante sobre el dashboard: la cobertura 0,0% significa que no se importó ningún reporte de cobertura al analizar; NO significa que no existan tests. El repositorio tiene 203 archivos de test (Vitest/Playwright). Medir e importar el lcov real es una de las mejoras propuestas.</p>
+  <p>Los riesgos reales que encontramos son acotados y concretos: 22 llamadas a <code>sort()</code> sin comparador que afectan el determinismo de IDs, exports y listados MCP; 2 ternarios con ramas idénticas; 1 test sin assertions; y 8 funciones con complejidad cognitiva superior a 100. En cambio, 568 de los 1.828 issues (31%) corresponden a una sola regla mecánica de estilo (push consecutivos, S7778): inflan el conteo pero no representan riesgo estructural.</p>
+  <p>Proponemos un roadmap en olas, cada una pensada como un issue o PR independiente (§9), y ofrecemos preparar los PRs que el equipo decida priorizar. Este informe no modifica código del proyecto. Todo el detalle, con snippets verificados y una propuesta de CI modular, está en las secciones siguientes.</p>
+  </div>
+</section>
+
+<section id="positivo" class="ok">
+  <h2>Lo que está funcionando bien</h2>
+  <p>Antes de los hallazgos, conviene dejar registrado lo que el análisis confirma que está bien resuelto. Estas fortalezas se conservan íntegras en todas las propuestas de este informe.</p>
+  <ul>
+    <li><strong>Open source bajo licencia MIT</strong>: proyecto público, con licencia permisiva y releases versionadas (v3.144.1 al momento del análisis).</li>
+    <li><strong>Monorepo pnpm limpio</strong>: separación clara de responsabilidades entre <code>cli</code>, <code>admin</code>, <code>mcp</code>, <code>admin-server</code>, <code>integrations</code> y <code>docs</code>, con protocolo <code>workspace:*</code> bien usado.</li>
+    <li><strong>0 vulnerabilidades y 0 security hotspots</strong>: security rating A en el perfil «Sonar way» (404 reglas TypeScript activas, incluidas 30 de secrets). Ningún secreto detectado en el código.</li>
+    <li><strong>Duplicación global baja</strong>: 2,4% de líneas duplicadas, con maintainability rating A (deuda técnica equivalente al 0,8% del tamaño del código).</li>
+    <li><strong>Automatización de release sólida</strong>: guards de drift (README sync, skills sync, cli==mcp, tag==versión, CLI --version==pkg), provenance npm con <code>id-token: write</code> y <code>pnpm publish</code> para reescribir <code>workspace:*</code> correctamente.</li>
+    <li><strong>Smoke tests del artefacto publicado (WI-087)</strong>: pack → install fuera del monorepo → sesión MCP stdio real, en Node 22 y 24. Verifica que el paquete publicado funciona, no solo que el build pasa.</li>
+    <li><strong>Workflow de integración modular</strong>: <code>telemetry-http-integration.yml</code> ya aplica paths de PR, harness pineado por SHA, service container, mínimo privilegio y timeout. Es el modelo a extender.</li>
+  </ul>
+</section>
+
+<section id="metodologia">
+  <h2>1. Metodología y alcance</h2>
+  <p>El análisis se realizó sobre una instancia local de SonarQube Community Edition (contenedor <code>sonarqube-current</code>), con el proyecto <code>kaddo</code> y el SonarScanner CLI 8.0.1 vía Docker sobre el monorepo pnpm. El escáner terminó con éxito (exit 0, 33 s). Todos los números de este informe salen de la API de SonarQube (<code>measures/component</code>, <code>measures/component_tree</code>, <code>issues/search</code> con paginación completa — 1.828 issues, <code>qualitygates/show</code>, <code>rules/show</code>); cada snippet de código se verificó contra el archivo fuente en la revisión analizada. La sección 10 resume cómo reproducirlo.</p>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Elemento</th><th>Valor</th><th>Fuente</th></tr></thead>
+    <tbody>
+      <tr><td>Servidor</td><td>SonarQube Community Build 26.7.0.124771 (local)</td><td><code>api/system/status</code></td></tr>
+      <tr><td>Escáner</td><td>SonarScanner CLI 8.0.1.6346, Java 21 (Docker)</td><td>log del scan</td></tr>
+      <tr><td>Proyecto</td><td>key <code>kaddo</code>, versión 3.144.1, revisión <code>f7325f9</code></td><td><code>project_analyses/search</code> · 2026-11-25 04:34 UTC</td></tr>
+      <tr><td>Fuentes</td><td><code>packages</code>, <code>apps/docs</code>, <code>scripts</code> → 310 archivos fuente</td><td><code>sonar.sources</code> + component_tree (FIL)</td></tr>
+      <tr><td>Tests</td><td>6 directorios de tests Vitest/Playwright → 203 archivos de test</td><td><code>sonar.tests</code> + component_tree (UTS)</td></tr>
+      <tr><td>Exclusiones</td><td>node_modules, dist, public, assets, *.d.ts (tests van como scope de test)</td><td><code>sonar.exclusions</code></td></tr>
+      <tr><td>Perfil de calidad</td><td>«Sonar way» TypeScript: 404 reglas activas (JS: 391, secrets: 30)</td><td><code>qualityprofiles/search</code></td></tr>
+      <tr><td>Quality gate</td><td>«Sonar way» con 4 condiciones Clean-as-You-Code (new code)</td><td><code>qualitygates/show</code></td></tr>
+      <tr><td>Cobertura</td><td>No medida: sin reporte lcov, el sensor «Zero Coverage» pone 0,0%</td><td>log del scan + measures</td></tr>
+    </tbody>
+  </table></div>
+  <p class="leyenda"><strong>Cómo interpretarlo:</strong> los «513 archivos» analizados incluyen 203 archivos de test. De los 1.828 issues, 84 viven en tests (70 de especificidad de assertions S5906, 13 de tests parametrizables S5976 y el BLOCKER S2699). El análisis es la primera corrida del proyecto: no hay línea base de «código nuevo», así que las condiciones del gate todavía no se evalúan. La cobertura 0,0% del dashboard significa «sin reporte de cobertura importado», no «sin tests»: la suite existe y es extensa.</p>
+</section>
+
+<section id="metricas">
+  <h2>2. Métricas generales — dashboard</h2>
+  <p>El perfil de riesgo de Kaddo es <strong>mantenibilidad y determinismo</strong>, no seguridad: 0 vulnerabilidades y 0 hotspots, pero 43 bugs (22 CRITICAL por <code>sort()</code> sin comparador) y 1.785 code smells. La deuda técnica es de 12.712 minutos (≈ 212 horas ≈ 26,5 días-persona de 8 h), un ratio de 0,8% sobre el tamaño del código: mantenibilidad A. La confiabilidad cae a <strong>D</strong> por los bugs CRITICAL, y es el indicador que más conviene atender primero. Un tercio de todos los issues (568) es una sola regla mecánica de <code>push()</code> consecutivos: el conteo total sobrestima el riesgo estructural. Y dos números del dashboard necesitan contexto: la cobertura 0,0% (no se importó reporte de cobertura; los tests existen) y el gate OK (primera corrida, sin código nuevo que evaluar).</p>
+  <div class="fichas">
+    <div class="ficha"><b>43</b><span>bugs (22 CRITICAL · 2 MAJOR · 19 MINOR)</span></div>
+    <div class="ficha"><b>0</b><span>vulnerabilidades</span></div>
+    <div class="ficha"><b>0</b><span>security hotspots</span></div>
+    <div class="ficha"><b>1.785</b><span>code smells (1 BLOCKER · 118 CRITICAL)</span></div>
+    <div class="ficha"><b>sin medir</b><span>cobertura (0,0% es Zero Coverage Sensor)</span></div>
+    <div class="ficha"><b>2,4%</b><span>duplicación (1.562 líneas · 129 bloques · 37 archivos)</span></div>
+    <div class="ficha"><b>12.712 min</b><span>deuda técnica ≈ 26,5 días-persona · ratio 0,8%</span></div>
+    <div class="ficha"><b>D</b><span>reliability rating (4,0) — por bugs CRITICAL</span></div>
+    <div class="ficha"><b>A</b><span>security rating (1,0) — 0 vulns, 0 hotspots</span></div>
+    <div class="ficha"><b>A</b><span>maintainability rating (1,0) — ratio 0,8%</span></div>
+    <div class="ficha"><b>54.723</b><span>ncloc (64.036 líneas totales)</span></div>
+    <div class="ficha"><b>4.827</b><span>funciones · 13.902 complejidad ciclomática</span></div>
+  </div>
+  <dl class="dpi">
+    <dt>Dato</dt>
+    <dd>Las fichas de bugs, smells, deuda y duplicación salen de <code>measures/component</code> y son reales.</dd>
+    <dt>Presentación</dt>
+    <dd>La ficha de cobertura muestra «sin medir» en vez del 0,0% del dashboard: ese 0,0% viene del Zero Coverage Sensor porque no se importó un reporte lcov; no sabemos si la cobertura real es 0%, 40% u 80%, pero la suite de tests existe (203 archivos).</dd>
+    <dt>Cómo interpretarlo</dt>
+    <dd>La security rating A es real para vulnerabilidades y hotspots; conviene leerla junto con las 76 regex con backtracking super-lineal (S8786), que Sonar clasifica como smells MAJOR: «0 vulnerabilidades» describe lo que el perfil midió, no una garantía absoluta de seguridad. Los ratings son la escala estándar de Sonar (1=A … 5=E).</dd>
+  </dl>
+</section>
+
+<section id="severidad">
+  <h2>3. Distribución por severidad y tipo</h2>
+  <dl class="dpi">
+    <dt>Dato</dt>
+    <dd>Los 1.828 issues abiertos, paginados completos desde <code>issues/search</code>.</dd>
+    <dt>Presentación</dt>
+    <dd>Barras proporcionales al conteo (la barra de BLOCKER tiene ancho mínimo visible: es 1 issue, 0,05%).</dd>
+    <dt>Cómo interpretarlo</dt>
+    <dd>Antes de leer los conteos, conviene separar volumen de riesgo. 568 de los 1.828 issues (31%) son una sola regla mecánica de estilo (S7778, push consecutivos): no representan riesgo estructural y se resuelven con un codemod. El volumen está en MINOR (66%), pero el riesgo está en CRITICAL: 22 bugs de determinismo + 108 funciones con complejidad cognitiva extrema + 5 anidamientos profundos de funciones (S2004) + 4 usos de <code>void</code> (S3735) + 1 S3776 en un .js. El 61% de los MINOR (733 de 1.207) son solo dos reglas mecánicas: S7778 (568) y S6759 (165).</dd>
+  </dl>
+  <div class="sevrow"><span class="tag stop">BLOCKER</span><div class="barrow big"><div class="barfill stop" style="width:1.0%"></div></div><span class="sevnum">1 · 0.1%</span></div>
+<div class="sevrow"><span class="tag stop">CRITICAL</span><div class="barrow big"><div class="barfill stop" style="width:7.7%"></div></div><span class="sevnum">140 · 7.7%</span></div>
+<div class="sevrow"><span class="tag wait">MAJOR</span><div class="barrow big"><div class="barfill wait" style="width:26.3%"></div></div><span class="sevnum">480 · 26.3%</span></div>
+<div class="sevrow"><span class="tag go">MINOR</span><div class="barrow big"><div class="barfill go" style="width:66.0%"></div></div><span class="sevnum">1207 · 66.0%</span></div>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Tipo</th><th>BLOCKER</th><th>CRITICAL</th><th>MAJOR</th><th>MINOR</th><th>Total</th></tr></thead>
+    <tbody>
+      <tr><td>BUG</td><td>0</td><td>22</td><td>2</td><td>19</td><td><strong>43</strong></td></tr>
+      <tr><td>CODE_SMELL</td><td>1</td><td>118</td><td>478</td><td>1.188</td><td><strong>1.785</strong></td></tr>
+      <tr><td>VULNERABILITY / HOTSPOT</td><td>0</td><td>0</td><td>0</td><td>0</td><td><strong>0</strong></td></tr>
+      <tr><td><strong>Total</strong></td><td><strong>1</strong></td><td><strong>140</strong></td><td><strong>480</strong></td><td><strong>1.207</strong></td><td><strong>1.828</strong></td></tr>
+    </tbody>
+  </table></div>
+  <p class="leyenda">El único BLOCKER es S2699 (test sin assertions) y Sonar lo tipa CODE_SMELL, no BUG. Los 19 BUG MINOR son todos S1082 (elementos clicables sin teclado) en packages/admin. Esfuerzo total de remediación estimado por Sonar: 13.057 min (12.712 smells + 345 bugs).</p>
+</section>
+
+<section id="reglas">
+  <h2>4. Top 15 reglas disparadas</h2>
+  <dl class="dpi">
+    <dt>Dato</dt>
+    <dd>Conteo por regla sobre los 1.828 issues; nombre y severidad desde <code>rules/show</code>.</dd>
+    <dt>Presentación</dt>
+    <dd>Tabla ordenada por conteo, con porcentaje sobre el total.</dd>
+    <dt>Cómo interpretarlo</dt>
+    <dd>El ranking por conteo no es ranking por riesgo. S7778 lidera con 568 pero es una regla de estilo mecánica; S2871 cierra el top 15 con 22 y es la que afecta el determinismo de IDs y exports. La columna «Acción sugerida» separa lo mecánico de lo estructural.</dd>
+  </dl>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Regla</th><th>Nombre</th><th>Count</th><th>%</th><th>Severidad</th><th>Tipo</th><th>Acción sugerida</th></tr></thead>
+    <tbody>
+<tr><td><code>S7778</code></td><td>Multiple consecutive calls to methods that accept multiple arguments should be combined</td><td><strong>568</strong></td><td>31.1%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Combinar push consecutivos en push variádico. Codemod; 31% del backlog total.</td></tr>
+<tr><td><code>S6759</code></td><td>React props should be read-only</td><td><strong>165</strong></td><td>9.0%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Marcar props como Readonly. Codemod; previene mutación accidental.</td></tr>
+<tr><td><code>S3358</code></td><td>Ternary operators should not be nested</td><td><strong>124</strong></td><td>6.8%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Extraer ternarios anidados a funciones con nombre. Legibilidad + lógica testeable.</td></tr>
+<tr><td><code>S3776</code></td><td>Cognitive Complexity of functions should not be too high</td><td><strong>108</strong></td><td>5.9%</td><td><span class="tag stop">CRITICAL</span></td><td>CODE_SMELL</td><td>Refactorizar funciones >15 de complejidad cognitiva. 7 pasan los 100. Riesgo de regresión.</td></tr>
+<tr><td><code>S6551</code></td><td>Objects and classes converted or coerced to strings should define a "toString()" method</td><td><strong>88</strong></td><td>4.8%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Validar tipo antes de String()/coerción. Evita '[object Object]' silencioso.</td></tr>
+<tr><td><code>S7781</code></td><td>Strings should use "replaceAll()" instead of "replace()" with global regex</td><td><strong>85</strong></td><td>4.6%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Usar replaceAll() en vez de replace(/g). Mecánico.</td></tr>
+<tr><td><code>S8786</code></td><td>Regular expressions should not cause non-linear backtracking</td><td><strong>76</strong></td><td>4.2%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Triage ReDoS por exposición de entrada; reescribir regex con backtracking super-lineal.</td></tr>
+<tr><td><code>S5906</code></td><td>The most specific assertion should be used</td><td><strong>70</strong></td><td>3.8%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Assertions más específicas en tests (toBe vs toEqual, etc.). 70 en archivos de test.</td></tr>
+<tr><td><code>S6594</code></td><td>"RegExp.exec()" should be preferred over "String.match()"</td><td><strong>69</strong></td><td>3.8%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Preferir RegExp.exec() sobre String.match(). Mecánico.</td></tr>
+<tr><td><code>S4624</code></td><td>Template literals should not be nested</td><td><strong>62</strong></td><td>3.4%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Desanidar template literals con helpers de formato. 62 casos.</td></tr>
+<tr><td><code>S6479</code></td><td>JSX list components should not use array indexes as key</td><td><strong>45</strong></td><td>2.5%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Keys estables en listas React. 45 casos, todos en admin.</td></tr>
+<tr><td><code>S6582</code></td><td>Optional chaining should be preferred</td><td><strong>34</strong></td><td>1.9%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Optional chaining en vez de &&. Mecánico.</td></tr>
+<tr><td><code>S2681</code></td><td>Multiline blocks should be enclosed in curly braces</td><td><strong>24</strong></td><td>1.3%</td><td><span class="tag wait">MAJOR</span></td><td>CODE_SMELL</td><td>Llaves explícitas en bloques multilínea. Revisar cuáles esconden flujo ambiguo.</td></tr>
+<tr><td><code>S1128</code></td><td>Unnecessary imports should be removed</td><td><strong>24</strong></td><td>1.3%</td><td><span class="tag go">MINOR</span></td><td>CODE_SMELL</td><td>Eliminar imports sin uso. Mecánico.</td></tr>
+<tr><td><code>S2871</code></td><td>"Array.prototype.sort()" and "Array.prototype.toSorted()" should use a compare function</td><td><strong>22</strong></td><td>1.2%</td><td><span class="tag stop">CRITICAL</span></td><td>BUG</td><td>Comparador explícito en sort(). 22 BUG CRITICAL: determinismo de IDs, exports y UI.</td></tr>
+    </tbody>
+  </table></div>
+  <p class="leyenda">Cola larga relevante fuera del top 15: S1082 ×19 (BUG, a11y), S6819 ×19 y S6847 ×13 (a11y), S5976 ×13 (tests parametrizables), S1854 ×8 (dead stores), S2699 ×1 (BLOCKER). Contexto útil: las reglas nuevas de Sonar 26.x (S7778, S7781, S7772, S7773, S7776, S7763) aportan ~700 issues de estilo moderno; gran parte del conteo refleja el perfil actualizado del escáner, no un deterioro del código.</p>
+</section>
+
+<section id="paquetes">
+  <h2>5. Hallazgos por paquete</h2>
+  <dl class="dpi">
+    <dt>Dato</dt>
+    <dd>Issues agregados por paquete desde la lista completa; archivos, ncloc y deuda desde <code>component_tree</code> (solo archivos fuente).</dd>
+    <dt>Presentación</dt>
+    <dd>Tabla con barra proporcional al total de issues; densidad = issues por cada 1.000 líneas de código.</dd>
+    <dt>Cómo interpretarlo</dt>
+    <dd>cli concentra el 68,5% de los issues en volumen absoluto, pero <strong>admin tiene mayor densidad</strong> (39,3 issues/kloc contra 36,2 de cli): la UI presenta proporcionalmente más hallazgos por línea. La deuda de cli (9.274 min) es el 73% de la deuda total. Los 84 issues en archivos de test no aparecen en esta tabla (el árbol de componentes fuente no los incluye).</dd>
+  </dl>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Paquete</th><th>Archivos</th><th>ncloc</th><th>Bugs</th><th>Smells</th><th>Total</th><th>Deuda (min)</th><th>Densidad /kloc</th><th>Volumen</th></tr></thead>
+    <tbody>
+<tr><td><code>packages/cli</code></td><td>165</td><td>34.633</td><td>18</td><td>1234</td><td><strong>1252</strong></td><td>9.274</td><td>36.2</td><td><div class="barrow"><div class="barfill" style="width:100%"></div></div></td></tr>
+<tr><td><code>packages/admin</code></td><td>97</td><td>10.745</td><td>24</td><td>398</td><td><strong>422</strong></td><td>2.209</td><td>39.3</td><td><div class="barrow"><div class="barfill" style="width:34%"></div></div></td></tr>
+<tr><td><code>packages/mcp</code></td><td>18</td><td>4.149</td><td>1</td><td>84</td><td><strong>85</strong></td><td>620</td><td>20.5</td><td><div class="barrow"><div class="barfill" style="width:7%"></div></div></td></tr>
+<tr><td><code>packages/admin-server</code></td><td>8</td><td>2.709</td><td>0</td><td>32</td><td><strong>32</strong></td><td>202</td><td>11.8</td><td><div class="barrow"><div class="barfill" style="width:3%"></div></div></td></tr>
+<tr><td><code>packages/integrations</code></td><td>12</td><td>1.160</td><td>0</td><td>20</td><td><strong>20</strong></td><td>95</td><td>17.2</td><td><div class="barrow"><div class="barfill" style="width:2%"></div></div></td></tr>
+<tr><td><code>apps/docs</code></td><td>8</td><td>1.167</td><td>0</td><td>11</td><td><strong>11</strong></td><td>51</td><td>9.4</td><td><div class="barrow"><div class="barfill" style="width:1%"></div></div></td></tr>
+<tr><td><code>scripts</code></td><td>2</td><td>160</td><td>0</td><td>6</td><td><strong>6</strong></td><td>51</td><td>37.5</td><td><div class="barrow"><div class="barfill" style="width:0%"></div></div></td></tr>
+    </tbody>
+  </table></div>
+  <p class="leyenda">Lectura por paquete: <strong>cli</strong> — complejidad extrema (8 funciones >100), 552 push consecutivos, 66 regex ReDoS, 16 sort sin comparador (knowledge-consolidation ×4 alimenta hashes; okf/export ×4). <strong>admin</strong> — 24 bugs (19 a11y + 5 sort), 165 props no read-only, 45 keys de índice, 43 ternarios anidados. <strong>mcp</strong> — 1 sort CRITICAL en listados expuestos a agentes + 6 regex. <strong>admin-server</strong>, <strong>integrations</strong>, <strong>docs</strong> y <strong>scripts</strong> — volumen bajo, sin bugs.</p>
+</section>
+
+<section id="hallazgos">
+  <h2>6. Hallazgos detallados (23 verificados contra el código)</h2>
+  <p>Cada hallazgo trae el mensaje exacto de SonarQube, el snippet real del archivo en la revisión <code>f7325f9</code> (línea marcada), por qué importa y una corrección sugerida. Son 23 hallazgos verificados: 22 fichas (F01–F22) y el análisis de duplicación (CPD) de §6.5. La etiqueta <span class="tag">mecánico</span> distingue el arreglo de estilo del cambio de comportamiento.</p>
+  <p>Para reducir ruido, los hallazgos se agrupan en tres niveles de prioridad, no por conteo:</p>
+  <ul>
+    <li><strong>Crítico (§6.1)</strong> — puede cambiar comportamiento: <code>sort()</code> sin comparador, ternarios con ramas idénticas y el test sin assertions.</li>
+    <li><strong>Importante (§6.2)</strong> — mantenibilidad y robustez: complejidad cognitiva &gt;100 y regex con backtracking super-lineal (riesgo acotado, triage por exposición).</li>
+    <li><strong>Mejora (§6.3–6.5)</strong> — accesibilidad, reglas mecánicas de estilo (codemods) y duplicación concentrada. Sin riesgo inmediato; mejoran la salud del código a largo plazo.</li>
+  </ul>
+</section>
+
+<section class="bad" id="critico"><h2>6.1 Crítico · Determinismo y corrección (cambian comportamiento)</h2><p>Estos hallazgos pueden cambiar el comportamiento observable o no verifican lo que prometen. Sugerimos tratarlos primero: 22 <code>sort()</code> sin comparador (CRITICAL), 2 ternarios con ramas idénticas (MAJOR) y 1 test sin assertions (BLOCKER). Son arreglos acotados, de pocas horas en total.</p><div class="finding">
+<h3>F01 · S2699 · <span class="tag stop">BLOCKER</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/cli/tests/admin-096.test.ts:227</code> — Test sin assertions: el único BLOCKER del proyecto</p>
+<p><strong>Mensaje de SonarQube:</strong> «Add at least one assertion to this test case.»</p>
+<pre class="snippet"> 225 │   })
+ 226 │ 
+<mark> 227 │   it('Drizzle schema initializes without error', async () =&gt; {</mark>
+ 228 │     const { SQLiteAdminStorage } = await import('../../admin-server/src/storage/sqlite-storage.js')
+ 229 │     const storage = new SQLiteAdminStorage(path.join(dir, 'init.db'))
+ 230 │     await storage.initialize()
+ 231 │     // Double init should also succeed
+ 232 │     await storage.initialize()</pre>
+<p><strong>Por qué importa:</strong> El test «Drizzle schema initializes without error» llama <code>initialize()</code> dos veces y termina. No hay ningún <code>expect</code>: solo falla si el código tira una excepción, no si el comportamiento es incorrecto. Una inicialización incorrecta que no falle ruidosamente pasaría desapercibida, y el test daría una confianza que no está verificando. Nota: SonarQube lo clasifica CODE_SMELL (no BUG), pero es el único BLOCKER de los 1.828 issues.</p>
+<p><strong>Corrección sugerida:</strong> Agregar assertions observables: que las tablas existan tras <code>initialize()</code> (consulta a <code>sqlite_master</code> o método del storage) y que la segunda inicialización sea idempotente. Auditar el resto de la suite con la misma regla.</p>
+</div>
+<div class="finding">
+<h3>F02 · S2871 · <span class="tag stop">CRITICAL</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/cli/src/core/knowledge-consolidation.ts:302</code> — sort() sin comparador alimenta un sha256 que genera IDs</p>
+<p><strong>Mensaje de SonarQube:</strong> «Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.»</p>
+<pre class="snippet"> 300 │ 
+ 301 │ function stableOpportunityId(category: ConsolidationCategory, sources: string[]): string {
+<mark> 302 │   const key = [category, ...[...sources].sort()].join('|')</mark>
+ 303 │   return `${category}:${sha256(key).slice(0, 12)}`
+ 304 │ }
+ 305 │ 
+ 306 │ type LoadedArtifact = {
+ 307 │   artifact: Artifact</pre>
+<p><strong>Por qué importa:</strong> <code>stableOpportunityId</code> ordena <code>sources</code> con <code>.sort()</code> default (orden UTF-16) y hashea la clave para producir IDs de oportunidades de consolidación. La función busca producir IDs estables, pero el orden default puede variar entre entornos/locales con caracteres no ASCII: el mismo contenido puede producir IDs distintos. El determinismo no está garantizado en la capa que genera identidad.</p>
+<p><strong>Corrección sugerida:</strong> Comparador explícito: <code>.sort((a, b) =&gt; a.localeCompare(b))</code> o comparación por code-point documentada. Test que fije el ID esperado para un set de sources con acentos y caracteres no ASCII.</p>
+</div>
+<div class="finding">
+<h3>F03 · S2871 · <span class="tag stop">CRITICAL</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/cli/src/core/okf/export.ts:119</code> — Export OKF: índice de secciones con orden no determinista</p>
+<p><strong>Mensaje de SonarQube:</strong> «Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.»</p>
+<pre class="snippet"> 117 │     parts.push('## Sections')
+ 118 │     // childDirs are full bundle paths (e.g. "delivery/work-items"); link to each child's own index.
+<mark> 119 │     for (const d of [...childDirs].sort()) parts.push(`- [${d.split('/').pop()}/](${relLink(fromPath, `${d}/index.md`)})`)</mark>
+ 120 │     parts.push('')
+ 121 │   }
+ 122 │   const byType = new Map&lt;string, OkfConcept[]&gt;()
+ 123 │   for (const c of concepts) { const l = byType.get(c.type) ?? []; l.push(c); byType.set(c.type, l) }</pre>
+<p><strong>Por qué importa:</strong> El export de knowledge (OKF) ordena los directorios hijos con <code>.sort()</code> default para generar el índice Markdown. El orden de salida depende del comparador UTF-16: exports del mismo contenido pueden diferir entre corridas o plataformas, generando diffs ruidosos en <code>knowledge/</code>.</p>
+<p><strong>Corrección sugerida:</strong> <code>localeCompare</code> explícito + snapshot test del índice exportado para que el orden quede fijado por un test, no por el motor JS.</p>
+</div>
+<div class="finding">
+<h3>F04 · S2871 · <span class="tag stop">CRITICAL</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/admin/src/routes/WorkItems.tsx:140</code> — UI admin: lista de personas ordenada con sort() default</p>
+<p><strong>Mensaje de SonarQube:</strong> «Provide a compare function to avoid sorting elements alphabetically.»</p>
+<pre class="snippet"> 138 │   const archived = filtered.filter((it) =&gt; it.status === 'archived')
+ 139 │ 
+<mark> 140 │   const people = [...new Set(items.flatMap((item) =&gt; [...item.owners, ...item.contributors]))].sort()</mark>
+ 141 │   const hasFilters = q !== '' || statusFilter !== 'all' || moduleFilter !== 'all' || assignmentFilter !== 'all' || gitFilter !== 'all'
+ 142 │ 
+ 143 │   return (
+ 144 │     &lt;div style={{ padding: '24px 32px', maxWidth: 1000, margin: '0 auto' }}&gt;</pre>
+<p><strong>Por qué importa:</strong> La lista de owners/contributors en WorkItems se ordena con <code>.sort()</code> default: mayúsculas y acentos caen en posiciones contraintuitivas (orden UTF-16, no alfabético humano). Es una de las 22 llamadas sin comparador; 5 de ellas están en la UI admin.</p>
+<p><strong>Corrección sugerida:</strong> <code>.sort((a, b) =&gt; a.localeCompare(b, 'es', { sensitivity: 'base' }))</code>. Misma corrección en ExternalWorkItems, Resources y System.</p>
+</div>
+<div class="finding">
+<h3>F05 · S2871 · <span class="tag stop">CRITICAL</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/mcp/src/project.ts:209</code> — MCP server: listados con orden dependiente del entorno</p>
+<p><strong>Mensaje de SonarQube:</strong> «Provide a compare function that depends on "String.localeCompare", to reliably sort elements alphabetically.»</p>
+<pre class="snippet"> 207 │   }
+ 208 │   walk(absDir)
+<mark> 209 │   return out.sort()</mark>
+ 210 │ }</pre>
+<p><strong>Por qué importa:</strong> <code>return out.sort()</code> en el servidor MCP: las listas que el server expone a agentes/clientes se ordenan con el comparador default. Dos clientes en plataformas distintas pueden recibir órdenes distintos para el mismo proyecto; un agente que cachea o compara respuestas ve diferencias falsas.</p>
+<p><strong>Corrección sugerida:</strong> Comparador explícito (<code>localeCompare</code>) en la capa MCP. Es la superficie que consumen otros programas: en ella, el determinismo es parte del contrato con los clientes.</p>
+</div>
+<div class="finding">
+<h3>F06 · S3923 · <span class="tag wait">MAJOR</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/cli/src/commands/create.ts:42</code> — Ternario muerto en el wizard de creación</p>
+<p><strong>Mensaje de SonarQube:</strong> «This conditional operation returns the same value whether the condition is "true" or "false".»</p>
+<pre class="snippet">  40 │   while (true) {
+  41 │     const criterion = await text({
+<mark>  42 │       message: criteria.length === 0 ? 'Acceptance criterion' : 'Acceptance criterion',</mark>
+  43 │       placeholder: 'e.g. Users see confirmation after checkout',
+  44 │       validate: (v) =&gt; (criteria.length === 0 &amp;&amp; v.trim().length === 0 ? 'At least one criterion is required.' : undefined),
+  45 │     })
+  46 │ 
+  47 │     const trimmed = criterion.trim()</pre>
+<p><strong>Por qué importa:</strong> <code>criteria.length === 0 ? 'Acceptance criterion' : 'Acceptance criterion'</code>: las dos ramas son idénticas. Probable copy-paste: se perdió el mensaje diferenciado entre el primer criterio y los siguientes. El usuario no recibe la señal de que puede terminar la lista.</p>
+<p><strong>Corrección sugerida:</strong> Definir el mensaje real de la segunda rama (p. ej. «Next acceptance criterion (empty to finish)») o eliminar el ternario si no hay diferencia querida.</p>
+</div>
+<div class="finding">
+<h3>F07 · S3923 · <span class="tag wait">MAJOR</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/cli/src/commands/modules-discover.ts:423</code> — Cadena de iconos con dos ramas idénticas</p>
+<p><strong>Mensaje de SonarQube:</strong> «This conditional operation returns the same value whether the condition is "true" or "false".»</p>
+<pre class="snippet"> 421 │       d.status === 'foreign_system' ? '!' :
+ 422 │       d.status === 'duplicate' ? '!' :
+<mark> 423 │       d.status === 'missing' ? '✗' :</mark>
+ 424 │       '✗'
+ 425 │     console.log(`${icon} ${d.id}`)
+ 426 │     console.log(`  ${d.path}`)
+ 427 │     console.log(`  status: ${d.status}`)</pre>
+<p><strong>Por qué importa:</strong> La cadena distingue <code>foreign_system</code> y <code>duplicate</code> con «!», pero <code>missing</code> y el default muestran ambos «✗». O falta un icono distinto para <code>missing</code> o la rama sobra. El diagnóstico visual no llega a distinguir todos los estados que la cadena contempla.</p>
+<p><strong>Corrección sugerida:</strong> Decidir el icono correcto para cada estado y escribirlo; si todos los estados restantes comparten icono, colapsar la cadena.</p>
+</div></section>
+<section class="warn" id="importante"><h2>6.2 Importante · Complejidad cognitiva extrema</h2><p>S3776 con umbral 15. Ocho funciones pasan los 100 puntos; las tres peores verificadas abajo, con rutas confirmadas contra el código. No cambian el comportamiento por sí mismas, pero encarecen cada cambio futuro y elevan el riesgo de regresión: son la prioridad de mantenibilidad.</p><div class="finding">
+<h3>F09 · S3776 · <span class="tag stop">CRITICAL</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/core/project-explain.ts:597</code> — La función más compleja del repo: 210 puntos (umbral 15)</p>
+<p><strong>Mensaje de SonarQube:</strong> «Refactor this function to reduce its Cognitive Complexity from 210 to the 15 allowed.»</p>
+<pre class="snippet"> 595 │ }
+ 596 │ 
+<mark> 597 │ export function renderExplanationHuman(exp: ProjectExplanation): string {</mark>
+ 598 │   const lines: string[] = []
+ 599 │   lines.push('# Project Explanation')
+ 600 │   lines.push('')
+ 601 │ 
+ 602 │   lines.push('## Project')
+ 603 │   lines.push(`- Name: ${exp.project.name}`)
+ 604 │   lines.push(`- State: ${stateLabel(exp.project.state)}`)</pre>
+<p><strong>Por qué importa:</strong> <code>renderExplanationHuman</code> concentra 210 de complejidad cognitiva: 14 veces el umbral de la regla. Cualquier cambio en el render de la explicación del proyecto exige entender decenas de ramas anidadas. Es la función con mayor carga de contexto del CLI y el archivo con más deuda (803 min).</p>
+<p><strong>Corrección sugerida:</strong> Extraer cada sección del render a helpers puros (<code>renderProjectSection</code>, <code>renderDeliverySection</code>, …) con tests unitarios por sección. La función principal queda como orquestadora de una lista.</p>
+</div>
+<div class="finding">
+<h3>F10 · S3776 · <span class="tag stop">CRITICAL</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/core/next-step.ts:181</code> — El corazón del «qué hago ahora»: 132 puntos</p>
+<p><strong>Mensaje de SonarQube:</strong> «Refactor this function to reduce its Cognitive Complexity from 132 to the 15 allowed.»</p>
+<pre class="snippet"> 179 │  * Tech(current-state) → Tech(codebase) → blocking questions → roadmap → create → adapter → implement.
+ 180 │  */
+<mark> 181 │ export function resolveNextStep(dir: string, now: Date = new Date()): NextStepRecommendation {</mark>
+ 182 │   const config = loadConfig(dir)
+ 183 │   if (!config) {
+ 184 │     return { id: 'init', phase: 'Setup', label: 'Run `kaddo init` to initialize Kaddo.', command: 'kaddo init', reason: 'Kaddo is not initialized in this project.' }
+ 185 │   }
+ 186 │   const state = config.project.state
+ 187 │ 
+ 188 │   // POC is an operating mode, not a lifecycle state. Its route deliberately avoids the</pre>
+<p><strong>Por qué importa:</strong> <code>resolveNextStep</code> decide el siguiente paso del lifecycle con 132 de complejidad cognitiva. Es la lógica central del CLI (init → tech → preguntas → roadmap → create → implement) y está codificada como una cadena extensa de condicionales: cada estado nuevo agrega ramas a la misma función.</p>
+<p><strong>Corrección sugerida:</strong> Tabla de reglas o estrategias por estado: cada transición es una entrada testeable, no una rama más. Tests por estado del proyecto.</p>
+</div>
+<div class="finding">
+<h3>F11 · S3776 · <span class="tag stop">CRITICAL</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/templates/understand-template.ts:18</code> — Handoff para LLMs: 129 puntos</p>
+<p><strong>Mensaje de SonarQube:</strong> «Refactor this function to reduce its Cognitive Complexity from 129 to the 15 allowed.»</p>
+<pre class="snippet">  16 │  * the same information as the console output. No empty sections.
+  17 │  */
+<mark>  18 │ export function renderUnderstand(plan: UnderstandPlan): string {</mark>
+  19 │   const { project, steps } = plan
+  20 │   const rec = plan.nextStepRecommendation
+  21 │   const ds = plan.deliveryState
+  22 │   const parts: string[] = []
+  23 │ 
+  24 │   parts.push('# Kaddo Understand Handoff\n')
+  25 │   parts.push(</pre>
+<p><strong>Por qué importa:</strong> <code>renderUnderstand</code> en <code>templates/understand-template.ts</code> tiene 129 de complejidad: es la tercera peor del repo. Las otras funciones por encima de 100, con rutas verificadas contra el código, son <code>commands/guard.ts:186</code> (113), <code>templates/context-pack-template.ts:12</code> (112) y <code>commands/understand.ts:24</code> (106).</p>
+<p><strong>Corrección sugerida:</strong> Mismo tratamiento que F09: helpers por sección. El handoff que alimenta LLMs se beneficia especialmente de ser código testeable y fácil de seguir.</p>
+</div>
+<h3>Regex con backtracking super-lineal (S8786) — riesgo acotado, triage por exposición</h3><p>76 regex marcadas. Sonar las clasifica como code smells MAJOR, no como vulnerabilidades, por eso no aparecen en el conteo de seguridad. El riesgo práctico está acotado a entrada no confiable; sugerimos priorizar por exposición antes que reescribir las 76.</p><div class="finding">
+<h3>F12 · S8786 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/core/initiative-verification.ts:86</code> — Regex con backtracking super-lineal (ReDoS)</p>
+<p><strong>Mensaje de SonarQube:</strong> «Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.»</p>
+<pre class="snippet">  84 │ 
+  85 │ /** A canonical id is one token shaped like PREFIX-NUMBER (e.g. WI-204, INI-10, AN-005). */
+<mark>  86 │ const CANONICAL_ID = /^[A-Za-z]+-\d+[A-Za-z0-9-]*$/</mark>
+  87 │ 
+  88 │ /** Split a materialized reference into its tokens — a composite value yields more than one. */
+  89 │ function referenceTokens(value: string): string[] {
+  90 │   return value.split(/[,;/\s]+/).map((t) =&gt; t.trim()).filter(Boolean)</pre>
+<p><strong>Por qué importa:</strong> <code>CANONICAL_ID = /^[A-Za-z]+-\d+[A-Za-z0-9-]*$/</code> está marcada por S8786: en entradas largas que no matchean, el costo crece más que lineal. Son 76 regex marcadas (66 en cli, 6 en mcp, 4 en admin). En este caso la entrada viene de archivos locales de knowledge, así que el riesgo práctico es acotado; la regla señala el patrón que, sobre entrada no confiable, puede ser un vector de denegación de servicio.</p>
+<p><strong>Corrección sugerida:</strong> Triage por exposición: primero las regex que procesan contenido de usuario en admin. Reescribir con cuantificadores posesivos/atónicos o limitar el largo de entrada; medir antes/después con un caso patológico. No cambiar a ciegas las 76.</p>
+</div>
+<div class="finding">
+<h3>F13 · S8786 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/commands/verify.ts:92</code> — Parser de markdown con \s+ y .* solapados</p>
+<p><strong>Mensaje de SonarQube:</strong> «Simplify this regular expression to reduce its runtime, as it has super-linear performance due to backtracking.»</p>
+<pre class="snippet">  90 │   const acs: ParsedAcceptanceCriterion[] = []
+  91 │   for (const line of lines) {
+<mark>  92 │     const heading = line.match(/^(#{1,6})\s+(.*)$/)</mark>
+  93 │     if (heading) {
+  94 │       const level = heading[1].length
+  95 │       if (acLevel === 0) {
+  96 │         if (/^(?:\d+(?:\.\d+)*\.?\s+)?(acceptance\s+criteria|criterios\s+de\s+aceptaci[oó]n)\s*$/i.test(heading[2].trim())) {</pre>
+<p><strong>Por qué importa:</strong> <code>/^(#{1,6})\s+(.*)$/</code> en el parser de acceptance criteria: <code>\s</code> está contenido en <code>.</code>, y el analizador marca backtracking super-lineal por ese solapamiento. Parsea cada línea de los work items; una línea patológica puede costar mucho más que las demás.</p>
+<p><strong>Corrección sugerida:</strong> Separar las clases de caracteres (<code>[ \t]+</code> si se desea excluir saltos de línea) o reescribir el match en dos pasos. Verificar con una entrada de miles de espacios sin match.</p>
+</div></section>
+<section id="mejora-a11y"><h2>6.3 Mejora · Accesibilidad en la UI admin</h2><p>19 elementos clicables sin teclado (S1082, BUG MINOR), 45 keys de índice (S6479), 19 role=dialog en divs (S6819), 13 handlers en elementos no interactivos (S6847). Varios flujos de la UI admin no son operables por teclado; proponemos abordarlos como mejora de accesibilidad, con un componente compartido que cierre varias reglas a la vez.</p><div class="finding">
+<h3>F08 · S1082 · <span class="tag go">MINOR</span> <span class="tag">BUG</span></h3>
+<p class="meta"><code>packages/admin/src/routes/Planning.tsx:372</code> — Navegación por teclado rota: &amp;lt;a onClick&amp;gt; sin href</p>
+<p><strong>Mensaje de SonarQube:</strong> «Visible, non-interactive elements with click handlers must have at least one keyboard listener.»</p>
+<pre class="snippet"> 370 │               &lt;div key={i.id} style={{ ...row, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}&gt;
+ 371 │                 &lt;div&gt;
+<mark> 372 │                   &lt;a style={link} onClick={() =&gt; router.navigate({ to: '/initiatives/$initiativeId', params: { initiativeId: i.id }, search: { from: currentOrigin(), fromLabel: e.id } })}&gt;&lt;span style={mono}&gt;{i.id}&lt;/span&gt; {i.title}&lt;/a&gt; &lt;StatusBadge variant="muted"&gt;{i.status}&lt;/StatusBadge&gt;</mark>
+ 373 │                   &lt;div style={mutedSmall}&gt;{i.owners.length ? &lt;&gt;owner(s): {i.owners.join(', ')}&lt;/&gt; : 'unassigned'}{i.contributors.length ? ` · contributors: ${i.contributors.join(', ')}` : ''}&lt;/div&gt;
+ 374 │                 &lt;/div&gt;
+ 375 │                 &lt;button onClick={() =&gt; setRemoving(i.id)} style={{ ...actionGhost, color: 'var(--danger)', flex: '0 0 auto' }}&gt;Remove&lt;/button&gt;
+ 376 │               &lt;/div&gt;
+ 377 │             ))}
+ 378 │             &lt;h4 style={{ ...h4, marginTop: 14 }}&gt;Work Items&lt;/h4&gt;
+ 379 │             {e.workItems.length === 0 ? &lt;p style={muted}&gt;No work items yet.&lt;/p&gt; : e.workItems.map((w) =&gt; (</pre>
+<p><strong>Por qué importa:</strong> Un <code>&lt;a&gt;</code> sin <code>href</code> no es focuseable ni operable por teclado: la navegación al detalle de iniciativa solo existe para quien usa mouse. Son 19 elementos clicables sin teclado en packages/admin (S1082), más 13 elementos no interactivos con handlers (S6847).</p>
+<p><strong>Corrección sugerida:</strong> Usar <code>&lt;button&gt;</code> con estilo de link, o un href real con navegación del router. Activar <code>eslint-plugin-jsx-a11y</code> para que no vuelva a entrar.</p>
+</div>
+<div class="finding">
+<h3>F14 · S6479 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/admin/src/components/PlanningBreadcrumb.tsx:19</code> — Listas React con key de índice: 45 casos</p>
+<p><strong>Mensaje de SonarQube:</strong> «Do not use Array index in keys»</p>
+<pre class="snippet">  17 │       &lt;ol style={list}&gt;
+  18 │         {crumbs.map((c, i) =&gt; (
+<mark>  19 │           &lt;li key={i} style={item}&gt;</mark>
+  20 │             {c.to &amp;&amp; !c.current
+  21 │               ? &lt;button style={link} onClick={() =&gt; go(c.to)}&gt;{c.label}&lt;/button&gt;
+  22 │               : &lt;span style={c.current ? current : plain} aria-current={c.current ? 'page' : undefined}&gt;{c.label}&lt;/span&gt;}
+  23 │             {c.hint &amp;&amp; &lt;span style={hint}&gt; {c.hint}&lt;/span&gt;}
+  24 │             {i &lt; crumbs.length - 1 &amp;&amp; &lt;span aria-hidden="true" style={sep}&gt;/&lt;/span&gt;}
+  25 │           &lt;/li&gt;</pre>
+<p><strong>Por qué importa:</strong> <code>key={i}</code> en el breadcrumb (y 44 listas más de admin): al reordenar, filtrar o insertar, React reutiliza nodos por posición y el estado visual (foco, inputs, animaciones) queda pegado al elemento equivocado. El efecto es real: la identidad de los componentes queda declarada por posición y no por contenido.</p>
+<p><strong>Corrección sugerida:</strong> Key estable por contenido: <code>id</code>, o <code>to + label</code> en el breadcrumb. Codemod asistido sobre los 45 casos.</p>
+</div>
+<div class="finding">
+<h3>F17 · S6819 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/admin/src/components/EvidenceDrawer.tsx:50</code> — Triple hit en una línea: div con role=dialog, sin teclado</p>
+<p><strong>Mensaje de SonarQube:</strong> «Use &lt;dialog&gt; instead of the "dialog" role to ensure accessibility across all devices.»</p>
+<pre class="snippet">  48 │   })
+  49 │   return (
+<mark>  50 │     &lt;div role="dialog" aria-modal="true" aria-label="Record evidence" style={overlay} onClick={(e) =&gt; { if (e.target === e.currentTarget) onClose() }}&gt;</mark>
+  51 │       &lt;div style={drawer}&gt;
+  52 │         &lt;div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)' }}&gt;
+  53 │           &lt;h3 style={{ margin: 0, fontSize: 16 }}&gt;Record evidence&lt;/h3&gt;
+  54 │           &lt;p style={{ ...muted, margin: '4px 0 0' }}&gt;{milestone ? `Milestone ${milestone} · ` : ''}{criterion}&lt;/p&gt;
+  55 │         &lt;/div&gt;
+  56 │         &lt;div style={{ padding: 18, display: 'grid', gap: 12 }}&gt;
+  57 │           &lt;label style={field}&gt;&lt;span style={fieldLabel}&gt;Status&lt;/span&gt;</pre>
+<p><strong>Por qué importa:</strong> La misma línea acumula S6819 (usar <code>&lt;dialog&gt;</code> en vez de <code>role="dialog"</code>), S1082 (click sin teclado) y S6847 (elemento no interactivo con handler). El overlay de evidencia cierra con click afuera, pero no con Escape ni por teclado, y un lector de pantalla no recibe el comportamiento nativo de diálogo.</p>
+<p><strong>Corrección sugerida:</strong> Componente Drawer/Dialog compartido: <code>&lt;dialog&gt;</code> nativo o patrón accesible completo (focus trap, Escape, retorno de foco). Un solo arreglo cierra las tres reglas en los componentes que lo adopten.</p>
+</div>
+<div class="finding">
+<h3>F19 · S2681 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/admin/src/components/PlanningManage.tsx:148</code> — Early-return de una línea: la regla pide bloques explícitos</p>
+<p><strong>Mensaje de SonarQube:</strong> «This statement will not be executed conditionally; only the first statement will be. The rest will execute unconditionally.»</p>
+<pre class="snippet"> 146 │   })
+ 147 │   const valid = rows.every((r) =&gt; /^[A-Za-z0-9._-]+$/.test(r.id.trim()))
+<mark> 148 │   const requestClose = () =&gt; { if (dirty &amp;&amp; !window.confirm('Discard unsaved milestone changes?')) return; onClose() }</mark>
+ 149 │ 
+ 150 │   return (
+ 151 │     &lt;Drawer title="Manage Milestones" subtitle={`${plan.id} · ids are unique within the plan. A milestone used by an Epic can't be removed or renamed here.`} onClose={requestClose} wide
+ 152 │       footer={&lt;&gt;{dirty &amp;&amp; &lt;span style={{ ...muted, color: 'var(--warning)', flex: 1 }}&gt;Unsaved changes&lt;/span&gt;}&lt;ErrorText error={m.error} /&gt;&lt;Ghost onClick={requestClose}&gt;Cancel&lt;/Ghost&gt;&lt;Primary disabled={!valid || !dirty || m.isPending} onClick={() =&gt; m.mutate()}&gt;{m.isPending ? 'Saving…' : 'Save milestones'}&lt;/Primary&gt;&lt;/&gt;}&gt;
+ 153 │       {editing === null ? (
+ 154 │         &lt;&gt;
+ 155 │           {rows.length === 0 &amp;&amp; &lt;p style={muted}&gt;No milestones yet.&lt;/p&gt;}</pre>
+<p><strong>Por qué importa:</strong> <code>if (dirty &amp;&amp; !window.confirm(...)) return; onClose()</code> en una sola línea. S2681 marca que <code>onClose()</code> no es condicional. En este caso el early-return es intencional y correcto: el hallazgo es de legibilidad, no de comportamiento. De los 24 casos, conviene revisar cuáles esconden un flujo realmente ambiguo y cuáles son este patrón idiomático.</p>
+<p><strong>Corrección sugerida:</strong> Llaves y salto de línea para que el flujo se vea. La lógica es correcta; la sugerencia es solo de forma.</p>
+</div></section>
+<section id="mejora-mecanico"><h2>6.4 Mejora · Reglas mecánicas (codemods)</h2><p>Reglas de estilo/mantenibilidad con conteo alto y arreglo mecánico. No son riesgo inmediato; son la deuda que infla el dashboard. Se pueden resolver con codemods por batches, después de los fixes de comportamiento.</p><div class="finding">
+<h3>F15 · S6759 · <span class="tag go">MINOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/admin/src/components/NextActions.tsx:23</code> — Props de React no marcadas read-only: 165 componentes</p>
+<p><strong>Mensaje de SonarQube:</strong> «Mark the props of the component as read-only.»</p>
+<pre class="snippet">  21 │ const KIND_LABEL: Record&lt;InsightArtifactKind, string&gt; = { plan: 'Plan', epic: 'Epic', initiative: 'Initiative', 'work-item': 'Work Item' }
+  22 │ 
+<mark>  23 │ export function NextActions({ onOpen, onOpenDiagnostics }: {</mark>
+  24 │   onOpen: (kind: InsightArtifactKind, id: string, section?: string) =&gt; void
+  25 │   onOpenDiagnostics: () =&gt; void
+  26 │ }) {
+  27 │   const q = useQuery({ queryKey: ['planning', 'insights'], queryFn: getPlanningInsights, retry: false })
+  28 │ </pre>
+<p><strong>Por qué importa:</strong> S6759 pide <code>Readonly</code> en las props: es la segunda regla más disparada (165, todas en admin). Mecánica, pero previene mutación accidental de props y documenta el contrato del componente. Junto con S7778 (568) explica el 61% de los issues MINOR.</p>
+<p><strong>Corrección sugerida:</strong> <code>Readonly&lt;{...}&gt;</code> en la firma de cada componente. Codemod masivo; batch por carpeta de admin.</p>
+</div>
+<div class="finding">
+<h3>F16 · S3358 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/admin/src/routes/Planning.tsx:203</code> — Ternarios anidados dentro del JSX: 124 casos</p>
+<p><strong>Mensaje de SonarQube:</strong> «Extract this nested ternary operation into an independent statement.»</p>
+<pre class="snippet"> 201 │                 &lt;button style={diagOpenBtn} onClick={() =&gt; setShowDiagnostics(true)}&gt;
+ 202 │                   &lt;AlertTriangle size={15} style={{ verticalAlign: 'middle', marginRight: 6 }} /&gt;
+<mark> 203 │                   Open Diagnostics{data.findings.length &gt; 0 ? ` · ${data.findings.length} finding${data.findings.length === 1 ? '' : 's'}` : ''}</mark>
+ 204 │                 &lt;/button&gt;
+ 205 │               )}
+ 206 │             &lt;/&gt;
+ 207 │           )}
+ 208 │         &lt;/&gt;</pre>
+<p><strong>Por qué importa:</strong> El botón «Open Diagnostics» arma su label con un ternario que contiene otro ternario (plural de finding). Multiplicado por 124: el JSX de admin y cli acumula condiciones anidadas que dificultan la lectura. S3358 es MAJOR porque la anidación puede esconder errores de lógica.</p>
+<p><strong>Corrección sugerida:</strong> Extraer a variables o funciones con nombre (<code>findingsLabel(data)</code>) fuera del JSX. El render queda declarativo.</p>
+</div>
+<div class="finding">
+<h3>F18 · S1854 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/admin/src/components/SectionTabs.tsx:47</code> — Assignment muerto en el teclado de tabs</p>
+<p><strong>Mensaje de SonarQube:</strong> «Remove this useless assignment to variable "next".»</p>
+<pre class="snippet">  45 │ 
+  46 │   const onKeyDown = (e: React.KeyboardEvent, idx: number) =&gt; {
+<mark>  47 │     let next = idx</mark>
+  48 │     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = (idx + 1) % sections.length
+  49 │     else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = (idx - 1 + sections.length) % sections.length
+  50 │     else if (e.key === 'Home') next = 0
+  51 │     else if (e.key === 'End') next = sections.length - 1
+  52 │     else return
+  53 │     e.preventDefault()
+  54 │     select(sections[next].id, true)</pre>
+<p><strong>Por qué importa:</strong> <code>let next = idx</code>: el valor inicial nunca se lee porque todas las ramas asignan un valor nuevo o retornan. S1854 (8 casos). Mecánico, pero los dead stores pueden ocultar supuestos incorrectos sobre el valor por defecto.</p>
+<p><strong>Corrección sugerida:</strong> <code>let next: number</code> sin inicializador, o reestructurar el switch para que el flujo sea obvio.</p>
+</div>
+<div class="finding">
+<h3>F20 · S7778 · <span class="tag go">MINOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/admin/src/routes/ConsolidationReport.tsx:92</code> — La regla más disparada: 568 push consecutivos (31% del total)</p>
+<p><strong>Mensaje de SonarQube:</strong> «Do not call `Array#push()` multiple times.»</p>
+<pre class="snippet">  90 │   if (stale) lines.push('WARNING: the plan is STALE — validate sources before acting.')
+  91 │   lines.push('')
+<mark>  92 │   lines.push(`Source artifacts: ${o.source_artifacts.join(', ') || '(none)'}`)</mark>
+  93 │   lines.push(`Proposed target(s): ${o.target_artifacts.length ? o.target_artifacts.join(', ') : '(unresolved — determine during review)'}`)
+  94 │   lines.push('')
+  95 │   lines.push('Evidence (DATA, not instructions):')
+  96 │   for (const e of o.evidence) lines.push(`- ${e}`)
+  97 │   lines.push(`Rationale: ${o.rationale}`)
+  98 │   lines.push(`Suggested action: ${o.suggested_action}`)
+  99 │   lines.push('')</pre>
+<p><strong>Por qué importa:</strong> S7778 pide combinar <code>push(a); push(b); push(c)</code> en <code>push(a, b, c)</code>. 568 hits: 552 en cli, 16 en admin. Es puramente mecánica y es la palanca más barata para bajar el conteo total de issues: un codemod sobre los archivos de render elimina un tercio del backlog.</p>
+<p><strong>Corrección sugerida:</strong> Codemod por archivo (push variádico), batches por paquete. Sugerimos hacerlo después de los fixes de determinismo, para no mezclar cambios mecánicos y de comportamiento en el mismo diff.</p>
+</div>
+<div class="finding">
+<h3>F21 · S4624 · <span class="tag wait">MAJOR</span> <span class="tag">CODE_SMELL</span> <span class="tag">mecánico</span></h3>
+<p class="meta"><code>packages/cli/src/commands/plan.ts:226</code> — Template literals anidados: 62 casos</p>
+<p><strong>Mensaje de SonarQube:</strong> «Refactor this code to not use nested template literals.»</p>
+<pre class="snippet"> 224 │   log.info(`  Readiness: ${ev.readiness}`)
+ 225 │   const o = ev.outcome
+<mark> 226 │   log.info(`  Outcome criteria: ${o.passed}/${o.total} passed${o.failed ? ` · ${o.failed} failed` : ''}${o.notVerified ? ` · ${o.notVerified} unverified` : ''}${o.ambiguous ? ` · ${o.ambiguous} ambiguous` : ''}`)</mark>
+ 227 │   for (const c of o.criteria) log.info(`    [${c.status}${c.waived ? '/waived' : ''}${c.ambiguous ? '/ambiguous' : ''}] ${c.criterion}`)
+ 228 │   if (o.stale.length) log.warn(`  Stale evidence (criterion changed): ${o.stale.map((s) =&gt; s.criterion).join('; ')}`)
+ 229 │   if (ev.milestones) for (const m of ev.milestones) log.info(`  Milestone ${m.id}: ${m.outcome.passed}/${m.outcome.total} exit criteria verified`)
+ 230 │   if (ev.blockingDependencies.length) log.warn(`  Blocking dependencies: ${ev.blockingDependencies.join(', ')}`)
+ 231 │   for (const b of ev.blockers) log.warn(`  Blocker: ${b}`)</pre>
+<p><strong>Por qué importa:</strong> El log de outcome criteria anida cuatro template literals dentro de otro template. S4624 (MAJOR): la anidación profunda de templates es ilegible y no se puede testear por partes. Los renders de CLI están llenos de este patrón.</p>
+<p><strong>Corrección sugerida:</strong> Helpers de formato con nombre (<code>formatOutcome(o)</code>) y tests unitarios del string resultante. El template queda de una sola capa.</p>
+</div>
+<div class="finding">
+<h3>F22 · S6551 · <span class="tag go">MINOR</span> <span class="tag">CODE_SMELL</span></h3>
+<p class="meta"><code>packages/cli/src/core/work-item-write.ts:543</code> — String(obj) puede producir '[object Object]'</p>
+<p><strong>Mensaje de SonarQube:</strong> «'(data as Record&lt;string, unknown&gt;).status ?? ''' will use Object's default stringification format ('[object Object]') when stringified.»</p>
+<pre class="snippet"> 541 │   const raw = readFile(filePath)
+ 542 │   const { data, content } = matter(raw)
+<mark> 543 │   const status = lifecycleStateOf({ status: String((data as Record&lt;string, unknown&gt;).status ?? ''), filePath })</mark>
+ 544 │   if (status !== 'in-progress') throw new WorkItemWriteError('INVALID_TRANSITION', `Cannot complete a ${status} Work Item.`)
+ 545 │   const nextData = { ...(data as Record&lt;string, unknown&gt;), status: 'completed', completed_at: new Date().toISOString().split('T')[0] }
+ 546 │   let nextContent = content
+ 547 │   if (content.includes('_What did we learn from this change? Update after completion._')) nextContent = content.replace('_What did we learn from this change? Update after completion._', learning.trim())</pre>
+<p><strong>Por qué importa:</strong> <code>String((data as Record&lt;string, unknown&gt;).status ?? '')</code>: si el frontmatter del work item trae <code>status</code> como objeto o array, la coerción produce <code>'[object Object]'</code> y <code>lifecycleStateOf</code> recibe un valor inválido en vez de un error claro. S6551 (88 casos) marca exactamente este riesgo de coerción silenciosa.</p>
+<p><strong>Corrección sugerida:</strong> Validar el tipo antes de coerce (<code>typeof === 'string'</code>) y fallar con un mensaje que nombre el archivo y el campo. El frontmatter es entrada de usuario: conviene evitar que valores inesperados lleguen silenciosamente al lifecycle.</p>
+</div></section>
+<section id="mejora-duplicacion"><h2>6.5 Mejora · Duplicación concentrada en modules/*.ts (CPD)</h2>
+<dl class="dpi">
+  <dt>Dato</dt>
+  <dd>2,4% de líneas duplicadas en todo el repo (1.562 líneas, 129 bloques, 37 archivos).</dd>
+  <dt>Presentación</dt>
+  <dd>Verde en el dashboard, un indicador positivo.</dd>
+  <dt>Cómo interpretarlo</dt>
+  <dd>El promedio esconde la concentración. Los módulos de knowledge comparten estructura de scaffolding: <code>adr.ts</code> tiene 93,5% de líneas duplicadas y <code>rfc.ts</code> 92,6%; <code>migration.ts</code> 83,9%, <code>incident.ts</code> y <code>contracts.ts</code> 82,5%, <code>legacy.ts</code> 81,5%, <code>capabilities.ts</code> 63,6%. También el par <code>rss.xml.ts</code> en/es de docs (90,7% cada uno).</dd>
+</dl>
+<div class="two-col">
+<div><p class="meta"><code>packages/cli/src/modules/adr.ts</code> (60 líneas, 93,5% dup)</p><pre class="snippet">   1 │ import type { KaddoModule } from './types.js'
+   2 │ 
+   3 │ export const adrModule: KaddoModule = {
+   4 │   name: 'adr',
+   5 │   description: 'Architectural Decision Records — document decisions when risk justifies it',
+   6 │   configKey: 'module_adr',
+   7 │   dirs: ['knowledge/tech/decisions'],
+   8 │   files: [
+   9 │     {
+  10 │       path: 'knowledge/tech/decisions/.gitkeep',
+  11 │       content: '',
+  12 │     },
+  13 │   ],
+  14 │   workItemTypes: [
+  15 │     {
+  16 │       name: 'adr',
+  17 │       knowledgeLevel: 'K4',
+  18 │       description: 'Architectural Decision Record — high-risk decision with alternatives considered.',</pre></div>
+<div><p class="meta"><code>packages/cli/src/modules/rfc.ts</code> (52 líneas, 92,6% dup)</p><pre class="snippet">   1 │ import type { KaddoModule } from './types.js'
+   2 │ 
+   3 │ export const rfcModule: KaddoModule = {
+   4 │   name: 'rfc',
+   5 │   description: 'Request for Comments — explore relevant changes before building them',
+   6 │   configKey: 'module_rfc',
+   7 │   dirs: ['knowledge/rfcs'],
+   8 │   files: [
+   9 │     {
+  10 │       path: 'knowledge/rfcs/.gitkeep',
+  11 │       content: '',
+  12 │     },
+  13 │   ],
+  14 │   workItemTypes: [
+  15 │     {
+  16 │       name: 'rfc',
+  17 │       knowledgeLevel: 'K3',
+  18 │       description: 'RFC — proposal to explore or validate before committing to implementation.',</pre></div>
+</div>
+<p><strong>Corrección sugerida:</strong> factory <code>defineModule({ name, dirs, workItemTypes, … })</code> que genere la estructura común (<code>configKey</code>, <code>files</code> con <code>.gitkeep</code>, forma de los work item types); cada módulo declara solo lo diferencial. El par rss en/es puede compartir un builder con locale por parámetro. No es urgente (la duplicación global es baja), pero es la forma correcta de cerrar el 2,4% restante.</p>
+</section>
+
+<section id="ci-analisis">
+  <h2>7. Análisis de la CI de Kaddo: estado actual y oportunidades</h2>
+  <dl class="dpi">
+    <dt>Dato</dt>
+    <dd>Lectura completa de los tres workflows de kaddo en la revisión analizada: <code>ci.yml</code>, <code>release.yml</code> y <code>telemetry-http-integration.yml</code>.</dd>
+    <dt>Presentación</dt>
+    <dd>Inventario por workflow y matriz por área: estado actual, propuesta y justificación técnica.</dd>
+    <dt>Cómo interpretarlo</dt>
+    <dd>Tener CI no equivale a tener un gate explícito. Kaddo ya tiene fortalezas reales — guards de artefacto, provenance de release y un smoke test del paquete publicado — que la propuesta conserva íntegras. Las oportunidades son acotadas: acortar el feedback del PR (paralelismo), endurecer la cadena de suministro (permisos mínimos, pinning por SHA) y sumar verificaciones que hoy no corren (typecheck completo, lint sobre .tsx, cobertura y scanners de seguridad). Cada propuesta se justifica por el problema concreto que resuelve en este repo, no por moda.</dd>
+  </dl>
+  <h3>7.1 Inventario de workflows</h3>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Archivo</th><th>Trigger</th><th>Jobs</th><th>Paralelismo</th><th>Timeouts</th><th>Permisos</th></tr></thead>
+    <tbody>
+      <tr><td><code>ci.yml</code></td><td>push main + PR main</td><td>build-test (install → guards → build → test → version sync, en serie), mcp-smoke</td><td>2 jobs; matrix Node 22/24 solo en smoke</td><td>ninguno</td><td>sin bloque (default del repo)</td></tr>
+      <tr><td><code>release.yml</code></td><td>tag v*</td><td>release (único: guards + build + test + smoke + publish ×2 + gh-release)</td><td>todo en serie en un job</td><td>ninguno</td><td><code>contents: write</code> + <code>id-token: write</code> (provenance)</td></tr>
+      <tr><td><code>telemetry-http-integration.yml</code></td><td>PR con paths de telemetry + dispatch</td><td>telemetry-http (service dynamodb-local 2.5.3, harness privado pineado por SHA)</td><td>workflow independiente, path-filtered</td><td>15 min</td><td><code>contents: read</code></td></tr>
+    </tbody>
+  </table></div>
+  <h3>7.2 Matriz por área: estado actual, propuesta y justificación</h3>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Área</th><th>Estado actual en kaddo</th><th>Propuesta</th><th>Justificación técnica</th></tr></thead>
+    <tbody>
+      <tr><td>Paralelismo</td><td>build-test corre todo en serie adentro (install → guards → build → test → version sync); smoke aparte</td><td><span class="tag wait">mejora</span> Jobs independientes en paralelo (lint-typecheck, guards, build, test, smoke) con <code>needs</code> solo donde hay dependencia real</td><td>El feedback del PR pasa de la suma de todas las etapas al job más lento. Una falla de lint o de tipos se sabe en minutos, no después del build completo.</td></tr>
+      <tr><td>Gate explícito</td><td>no hay job gate; branch protection depende de marcar jobs individuales</td><td><span class="tag wait">mejora</span> Job <code>ci-summary</code> con <code>needs</code> de todos, <code>if: always()</code>, resumen en <code>$GITHUB_STEP_SUMMARY</code> y exit 1 si cualquiera falló; único required check</td><td>Con jobs individuales como required checks, un job nuevo que nadie marcó queda fuera de la protección y un PR puede mergear con ese job rojo. Un solo gate que necesita a todos cierra ese bypass por construcción.</td></tr>
+      <tr><td>Timeouts</td><td>solo telemetry declara timeout (15 min); ci.yml y release.yml sin timeout</td><td><span class="tag wait">mejora</span> <code>timeout-minutes</code> explícito en cada job (p. ej. 10–20 min; release 30)</td><td>El default de GitHub Actions es 360 minutos: un job colgado (prompt interactivo, red trabada, watcher que no termina) ocupa el runner hasta 6 horas y retrasa la cola del repo.</td></tr>
+      <tr><td>Permisos mínimos</td><td>solo telemetry declara <code>contents: read</code>; ci.yml sin bloque (default del repo); release con write a nivel global</td><td><span class="tag wait">mejora</span> <code>permissions: contents: read</code> a nivel workflow; <code>contents: write</code> + <code>id-token: write</code> únicamente en el job de publish</td><td>El token del job que testea o escanea no necesita escribir en el repo. Mínimo privilegio acota el daño de una action de terceros comprometida o de un script inyectado vía PR (supply-chain).</td></tr>
+      <tr><td>Pinning de actions</td><td>todo por tag mayor (@v4)</td><td><span class="tag wait">mejora</span> SHA completo en actions de terceros, con comentario de versión y Dependabot para actualizar</td><td>Un tag mayor es mutable: quien controla la action puede moverlo y ejecutar código distinto con los mismos permisos del workflow. El SHA es inmutable; el comentario de versión + Dependabot mantienen el pinning al día.</td></tr>
+      <tr><td>Typecheck</td><td>solo admin vía <code>tsc -b</code> dentro del build; tsup no typecheckea cli/mcp/admin-server/integrations</td><td><span class="tag wait">mejora</span> <code>tsc --noEmit</code> por paquete como job explícito de CI</td><td>tsup transpila con esbuild, que ignora los tipos: un error de tipos que rompe a los consumidores del paquete puede pasar con build verde. <code>tsc --noEmit</code> es la única verificación real de tipos para esos cuatro paquetes.</td></tr>
+      <tr><td>Lint / formato</td><td>eslint/prettier existen pero no corren en CI; <code>pnpm lint</code> solo cubre .ts en packages/ (deja afuera todo admin .tsx)</td><td><span class="tag wait">mejora</span> Correr lint en CI, extender el scope a .tsx y sumar <code>eslint-plugin-jsx-a11y</code> para admin</td><td>Los 19 bugs S1082 y los hallazgos S6819/S6847 de §6.3 viven en archivos .tsx que el lint actual nunca ve. Correrlo en CI con jsx-a11y evita que esos patrones de accesibilidad vuelvan a entrar en cada PR.</td></tr>
+      <tr><td>Cobertura</td><td>no se mide; el 0,0% de Sonar es sin reporte importado (la suite existe: 203 archivos de test)</td><td><span class="tag wait">mejora</span> <code>vitest run --coverage</code> con <code>@vitest/coverage-v8</code> + upload del lcov (artifact y SonarCloud)</td><td>Sin medición no hay forma de detectar regresiones de cobertura ni de que las condiciones de código nuevo del quality gate evalúen algo. Primero visibilidad (upload sin gate), después gate sobre código nuevo.</td></tr>
+      <tr><td>SAST</td><td>ninguno en CI (el análisis Sonar de este informe fue una corrida externa, no un workflow)</td><td><span class="tag wait">mejora</span> CodeQL javascript-typescript, cron semanal + push main, build-mode none</td><td>El perfil «Sonar way» no es un SAST de seguridad completo: CodeQL agrega consultas de taint-tracking sobre fuentes y sumideros. Fuera del camino crítico del PR para no alargar el feedback del contributor; hallazgos al Security tab vía SARIF.</td></tr>
+      <tr><td>SCA / dependencias</td><td>ninguno</td><td><span class="tag wait">mejora</span> Trivy fs HIGH/CRITICAL con exit-code 1 (post-merge) + dependency-review en PR</td><td>«0 vulnerabilidades» describe el código propio, no el árbol de dependencias. dependency-review frena el PR que introduce una dependencia con CVE conocido; Trivy barre el árbol completo y hace fallar el pipeline, no un warning decorativo.</td></tr>
+      <tr><td>Secret scanning</td><td>ninguno en CI (las 30 reglas de secrets de Sonar solo corren en análisis externos)</td><td><span class="tag wait">mejora</span> Activar secret scanning + push protection nativo de GitHub (gratis en repos públicos)</td><td>Push protection bloquea el secreto en el push, antes de que quede en el historial git (de donde sacarlo después es caro). Es una capa previa y complementaria a las reglas de secrets del escáner.</td></tr>
+      <tr><td>Concurrency / cancelación</td><td>no tiene</td><td><span class="tag wait">mejora</span> <code>concurrency</code> por PR con <code>cancel-in-progress: true</code></td><td>Commits sucesivos al mismo PR cancelan corridas ya superadas: feedback más rápido sobre el último commit y menos cola de runners para el resto de los contributors.</td></tr>
+      <tr><td>Reusable workflows</td><td>no tiene; la suite del release repite pasos del ci</td><td><span class="tag wait">mejora</span> Workflow reusable (<code>workflow_call</code>) como fuente única de la suite</td><td>PR, main y release verifican exactamente lo mismo, sin drift entre «lo que CI chequeó» y «lo que el release re-chequea». Un cambio de suite se hace en un solo archivo.</td></tr>
+      <tr><td>Smoke del artefacto publicado</td><td>mcp-smoke: pack + install fuera del monorepo + sesión MCP stdio real, Node 22/24 (WI-087)</td><td><span class="tag go">conservar</span> Mantener tal cual y correrlo también como precondición del publish</td><td>Un build verde no prueba que el paquete publicado funcione; este job sí lo prueba de verdad. Es una fortaleza diferencial del repo: la propuesta la conserva y la extiende al release.</td></tr>
+      <tr><td>Guards de versión/sync</td><td>README sync, skills sync, cli==mcp, tag==versión, CLI --version==pkg</td><td><span class="tag go">conservar</span> Mantener íntegros como condición de merge y de release</td><td>Cierran drift de release específico del contrato de este monorepo (versiones acopladas cli/mcp, docs sincronizados) que ningún scanner genérico detecta.</td></tr>
+      <tr><td>Modularidad por paths</td><td>telemetry filtrado por paths de PR</td><td><span class="tag go">conservar</span> Extender el patrón a otros workflows cuando aplique</td><td><code>telemetry-http-integration.yml</code> ya demuestra el modelo interno: paths de PR, harness pineado por SHA, service container, mínimo privilegio y timeout. La propuesta generaliza lo que el repo ya hace bien.</td></tr>
+      <tr><td>Release</td><td>tag v*, provenance npm, pnpm publish (reescribe workspace:*), gh-release; todo en serie en un job</td><td><span class="tag wait">mejora</span> Separar verify (suite reusable en paralelo) de publish (único job con write + id-token); environment opcional con aprobación humana</td><td>La provenance y el <code>pnpm publish</code> se conservan (npm publish publicaría el protocolo <code>workspace:*</code> literal, no instalable). Separar verify/publish reduce los permisos de escritura al único job que los necesita y publica solo después de la suite completa.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>7.3 Fortalezas de kaddo que la propuesta conserva</h3>
+  <ul>
+    <li><strong>WI-087 smoke del artefacto</strong>: un build verde no prueba que el paquete publicado funcione; kaddo lo prueba de verdad (pack → install externo → sesión MCP stdio real en Node 22/24). Pocas suites open source verifican el artefacto publicado con este nivel de realismo.</li>
+    <li><strong>Guards de drift</strong>: README/skills/versiones sincronizados como condición de merge y de release.</li>
+    <li><strong>Release correctness</strong>: provenance npm + pnpm publish para reescribir <code>workspace:*</code> (npm publish publicaría el protocolo literal, que no es instalable fuera del monorepo).</li>
+    <li><strong>telemetry-http-integration.yml</strong>: el archivo más modular que kaddo ya tiene — paths de PR, harness pineado por SHA, service container, mínimo privilegio, timeout. Es el modelo a extender, no a reemplazar.</li>
+  </ul>
+</section>
+
+<section id="ci-propuesta">
+  <h2>8. Propuesta de CI modular para Kaddo</h2>
+  <p><strong>Principio:</strong> el pipeline principal no se alarga porque todo corre en paralelo y lo pesado (SAST, Sonar, Trivy) vive fuera del camino crítico del PR. Kaddo es open source: los minutos de GitHub Actions son gratis, así que la restricción real es la <strong>latencia del PR</strong>, no el costo. Cinco archivos propuestos para <code>.github/workflows/</code> (validados con parser YAML), compartidos como propuesta sin abrir PR:</p>
+  <div class="diagram">PR ──────────► ci-pr.yml ──────► reusable-ci.yml (6 jobs en paralelo) ──► ci-summary ◄── required check
+                └─ dependency-review (deps nuevas con CVE HIGH/CRITICAL)
+
+push main ───► ci-main.yml ────► reusable-ci.yml ──► sonarcloud (con lcov real) + trivy fs
+cron semanal ► codeql.yml ─────► SAST javascript-typescript (fuera del camino crítico del PR)
+tag v* ──────► release.yml ────► verify (reusable-ci) ──► publish (único job con write + provenance)</div>
+  <div class="table-scroll"><table>
+    <thead><tr><th>Archivo propuesto</th><th>Trigger</th><th>Jobs</th><th>Por qué existe</th></tr></thead>
+    <tbody>
+      <tr><td><code>reusable-ci-proposed.yml</code></td><td><code>workflow_call</code></td><td>lint-typecheck, sync-guards, build, test (lcov opcional), mcp-smoke (Node 22/24), ci-summary</td><td>Fuente única de la suite. PR, main y release verifican exactamente lo mismo: sin drift entre «lo que CI chequeó» y «lo que el release re-chequea». El camino crítico pasa de install+build+test en serie al job más lento.</td></tr>
+      <tr><td><code>ci-pr-proposed.yml</code></td><td>PR a main</td><td>ci (reusable, coverage on) + dependency-review</td><td>Feedback rápido. <code>concurrency</code> cancela corridas superadas del mismo PR. El gate ci-summary es el único required check.</td></tr>
+      <tr><td><code>ci-main-proposed.yml</code></td><td>push main + dispatch</td><td>ci (reusable) + sonarcloud + trivy</td><td>Lo pesado post-merge: SonarCloud (gratis para repos públicos) recibe el lcov del job de test y mide cobertura de verdad; Trivy corta CVE HIGH/CRITICAL. Nada de esto alarga el PR.</td></tr>
+      <tr><td><code>codeql-proposed.yml</code></td><td>push main + cron mar 04:23 UTC + dispatch</td><td>analyze (javascript-typescript, build-mode none)</td><td>SAST continuo (cron semanal + main). Deliberadamente NO en PR: minutos de análisis que no bloquean al contributor. Hallazgos al Security tab vía SARIF.</td></tr>
+      <tr><td><code>release-proposed.yml</code></td><td>tag v*</td><td>verify (reusable) → publish</td><td>Publicar solo después de la suite completa en paralelo. Publish es el único job con <code>contents: write</code> + <code>id-token: write</code>; environment opcional con aprobación humana. Todos los guards actuales se conservan.</td></tr>
+    </tbody>
+  </table></div>
+  <h3>8.1 Prerrequisitos antes de commitear (orden importa)</h3>
+  <ol>
+    <li><strong>Renombrar</strong>: sacar el sufijo <code>-proposed</code>, actualizar los <code>uses:</code> y retirar el <code>ci.yml</code> viejo. Si se commitean tal cual, los triggers se duplican.</li>
+    <li><strong>.eslintrc.json</strong>: sumar <code>env.browser</code> y <code>jsx-a11y</code> para packages/admin (.tsx). Sin eso, el job de lint nace rojo (hoy <code>pnpm lint</code> solo mira .ts y nunca corrió en CI).</li>
+    <li><strong>@vitest/coverage-v8</strong> (matching vitest 1.6) en devDependencies raíz: sin el provider, <code>--coverage</code> prompting de instalación y el job se cuelga.</li>
+    <li><strong>SonarCloud</strong>: crear org/proyecto, cargar el secret <code>SONAR_TOKEN</code> y reemplazar <code>REPLACE_WITH_YOUR_ORG</code>. Alternativa: mantener solo el SonarQube local para auditorías profundas y no cablear SonarCloud (decisión abajo).</li>
+    <li><strong>Branch protection</strong>: requerir únicamente «CI Summary» (+ dependency-review si se quiere). Un solo check, no seis.</li>
+    <li><strong>Secret scanning + push protection</strong> de GitHub: activar en settings del repo (gratis para públicos). No es un workflow.</li>
+    <li><strong>SHA-pin</strong> de sonarcloud-github-action y softprops/action-gh-release antes de commitear (hoy quedan por tag mayor, marcado en comentarios).</li>
+  </ol>
+  <h3>8.2 Lo que la propuesta deliberadamente NO hace</h3>
+  <ul>
+    <li>CodeQL en cada PR (alargaría el camino crítico; va semanal + main).</li>
+    <li>Sonar/Trivy como required checks del PR (corren post-merge; el PR ya tiene lint, tests, build y smoke).</li>
+    <li>Matriz de OS (windows/macos) en la suite principal: el smoke MCP ya cubre Node 22/24; sumar OS es una decisión de costo de latencia, no de minutos.</li>
+    <li>Tocar los guards existentes de release: se conservan enteros y se les suma la suite paralela como precondición.</li>
+  </ul>
+</section>
+
+<section id="roadmap">
+  <h2>9. Roadmap combinado (SonarQube + CI) — issues candidatos</h2>
+  <p>Olas, no shopping list: cada ola deja al repo verificablemente mejor y la siguiente se apoya en la anterior. Cada ola está redactada como un issue o PR candidato, con título listo para copiar a GitHub. Los arreglos de comportamiento van antes que los codemods mecánicos para no mezclar ruido en el mismo diff. Ofrecemos preparar cualquiera de estos PRs si el equipo lo considera útil.</p>
+  <ol>
+    <li><strong>Ola 0 (horas)</strong> · <span class="issue-title">fix: explicit sort() comparators + real assertions in Drizzle init test (determinism)</span><br>Comparador explícito en los 22 <code>sort()</code> (empezar por <code>knowledge-consolidation.ts:302</code>, que alimenta sha256, y <code>mcp/project.ts:209</code>, que es contrato con agentes); assertions en el test BLOCKER <code>admin-096.test.ts:227</code>; los 2 ternarios con ramas idénticas. Habilita: reliability rating D → B/A.</li>
+    <li><strong>Ola 1 (1 día)</strong> · <span class="issue-title">ci: parallel reusable workflow with a single summary gate</span><br>Adoptar las propuestas de §8: renombrar archivos, retirar ci.yml, branch protection con ci-summary, timeouts/permisos/concurrency. Prerrequisitos 1–2 de §8.1. Habilita: todo lo siguiente se verifica solo en cada PR.</li>
+    <li><strong>Ola 2 (1 día)</strong> · <span class="issue-title">ci: import real Vitest lcov coverage and enable the new-code quality gate</span><br>@vitest/coverage-v8 + lcov → SonarCloud (o SonarQube local con lcov cableado). Condiciones de gate sobre código nuevo con cobertura medida. Habilita: reemplazar el 0,0% sin medir por cobertura real; el gate empieza a evaluar desde la segunda corrida.</li>
+    <li><strong>Ola 3 (1–2 días)</strong> · <span class="issue-title">security: CodeQL + Trivy + dependency-review + secret scanning; ReDoS triage</span><br>CodeQL semanal + Trivy + dependency-review + secret scanning nativo. Triage de las 76 regex S8786 por exposición (primero admin, que parsea contenido de usuario). Habilita: el «0 vulnerabilidades» pasa a ser una afirmación verificada por tres scanners, no por ausencia de scanners.</li>
+    <li><strong>Ola 4 (días, por función)</strong> · <span class="issue-title">refactor: extract helpers from cognitive-complexity hotspots; shared accessible Drawer</span><br>Las 8 funciones &gt;100 (empezar por <code>renderExplanationHuman</code> 210, <code>resolveNextStep</code> 132, <code>renderUnderstand</code> 129); componente Drawer accesible compartido (cierra S1082/S6819/S6847 de una); keys estables en las 45 listas; jsx-a11y como gate. Habilita: atacar el 91% de los CRITICAL smells (108 de 118 son S3776), de mayor a menor complejidad.</li>
+    <li><strong>Ola 5 (codemods por batches)</strong> · <span class="issue-title">chore: mechanical codemods (S7778, S6759, S7781, S3358, S4624, S1128) + defineModule factory</span><br>S7778 (568 push), S6759 (165 Readonly), S7781 (85 replaceAll), S3358 (124 ternarios), S4624 (62 templates), S1128 (24 imports). Factory <code>defineModule</code> para la duplicación de modules/*.ts. Habilita: el conteo total cae ~60% sin tocar comportamiento; el dashboard vuelve a ser legible.</li>
+  </ol>
+</section>
+
+<section id="reproducir">
+  <h2>10. Cómo reproducir este análisis</h2>
+  <p>El análisis es reproducible con herramientas públicas y gratuitas; no requiere acceso a infraestructura privada. Resumen (el detalle de parámetros está en la tabla de §1):</p>
+  <ol>
+    <li><strong>Servidor</strong>: SonarQube Community Edition 26.7.0 en Docker, con el perfil «Sonar way» para TypeScript (404 reglas activas).</li>
+    <li><strong>Proyecto</strong>: crear un proyecto con key <code>kaddo</code> y generar un token de análisis.</li>
+    <li><strong>Escáner</strong>: SonarScanner CLI 8.0.1 (Docker, Java 21) ejecutado desde la raíz del workspace pnpm, con <code>sonar.sources=packages,apps/docs,scripts</code>, los 6 directorios de tests Vitest/Playwright como <code>sonar.tests</code>, y exclusiones de node_modules, dist, public, assets y *.d.ts.</li>
+    <li><strong>Lectura de resultados</strong>: API del servidor — <code>measures/component</code>, <code>measures/component_tree</code>, <code>issues/search</code> (paginación completa), <code>qualitygates/show</code>, <code>rules/show</code>.</li>
+    <li><strong>Cobertura (recomendada)</strong>: ejecutar la suite Vitest con proveedor de cobertura lcov e importar el reporte con <code>sonar.javascript.lcov.reportPaths</code> para reemplazar el 0,0% del Zero Coverage Sensor por una medición real.</li>
+  </ol>
+  <p class="leyenda">Sin cobertura importada, el sensor «Zero Coverage» muestra 0,0% aunque existan tests: es el matiz más importante al reproducir el dashboard. El escaneo de la revisión <code>f7325f9</code> terminó en 33 s (exit 0).</p>
+</section>
+
+<section class="warn" id="decisiones">
+  <h2>11. Decisiones abiertas para los mantenedores</h2>
+  <p>Estas decisiones corresponden al equipo mantenedor de Kaddo. Las listamos para facilitar la conversación; ofrecemos preparar los PRs o ajustes que se decida priorizar.</p>
+  <ul>
+    <li>¿Se aplican los fixes de la Ola 0 como PRs al repositorio? Podemos prepararlos (comparadores de <code>sort()</code>, assertions del test, ternarios).</li>
+    <li>¿Se mide cobertura con <code>vitest run --coverage</code> y se importa el lcov ahora, o se cablea directamente en CI?</li>
+    <li>¿SonarCloud (gratuito para repos públicos, decoración de PRs) o SonarQube self-hosted solo para auditorías profundas?</li>
+    <li>¿El split de CI propuesto en §8 encaja con el flujo del equipo, o se ajusta (p. ej. CodeQL también en PR)?</li>
+    <li>¿Los codemods mecánicos (Ola 5) en un batch por regla o por paquete, para diffs más chicos y revisables?</li>
+    <li>¿Quality gate con condiciones sobre código nuevo una vez medida la cobertura, o se documenta como deuda hasta entonces?</li>
+  </ul>
+</section>
+
+<section id="nota-section">
+  <label for="nota">Nota / decisión</label>
+  <textarea id="nota" placeholder="Notas del equipo: prioridades, alcance, decisión sobre SonarCloud vs local, o solicitud de un PR con los fixes de determinismo."></textarea>
+  <div class="bar">
+    <button type="button" class="primary" id="guardar">Guardar en este navegador</button>
+    <button type="button" id="descargar">Descargar con la nota</button>
+    <span id="aviso" role="status"></span>
+  </div>
+</section>
+</main>
+<footer class="wrap">Informe SonarQube para mantenedores de Kaddo · preparado por JNZader · 25 de noviembre de 2026 · revisión f7325f9. Datos: API de SonarQube (1.828 issues paginados completos). Snippets verificados contra el código fuente. No se modificó código del proyecto ni se abrieron PRs: las 5 propuestas de CI se comparten como material de discusión.</footer>
+<script>
+(function () {
+  var KEY = 'auditoria-sonarqube-kaddo-detallado-2026-11-25';
+  var root = document.documentElement;
+  var nota = document.getElementById('nota');
+  var aviso = document.getElementById('aviso');
+  var saved = localStorage.getItem(KEY); if (saved) nota.value = saved;
+  var storedTheme = localStorage.getItem(KEY + '-theme'); if (storedTheme) root.setAttribute('data-theme', storedTheme);
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem(KEY + '-theme', next);
+  });
+  var copiar = document.getElementById('copiar-resumen');
+  if (copiar) copiar.addEventListener('click', function () {
+    var texto = document.getElementById('resumen-texto').innerText;
+    function listo() { aviso.textContent = 'Resumen copiado: listo para pegar en un issue de GitHub.'; }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = texto; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); listo(); } catch (e) { aviso.textContent = 'No se pudo copiar automáticamente; seleccione manualmente el texto del resumen.'; }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(texto).then(listo, fallback);
+    } else { fallback(); }
+  });
+  document.getElementById('guardar').addEventListener('click', function () {
+    localStorage.setItem(KEY, nota.value);
+    aviso.textContent = 'Guardado en este navegador.';
+  });
+  document.getElementById('descargar').addEventListener('click', function () {
+    var html = '<!DOCTYPE html>' + document.documentElement.outerHTML;
+    var escrito = nota.value.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    var fresh = html.replace(/(<textarea id="nota"[^>]*>)[\s\S]*?(<\/textarea>)/, function (_t, abre, cierra) { return abre + escrito + cierra; });
+    var blob = new Blob([fresh], { type: 'text/html' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'auditoria-sonarqube-kaddo-detallado-2026-11-25.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    aviso.textContent = 'Bajó una copia con la nota escrita adentro.';
+  });
+})();
+</script>
+</body></html>
